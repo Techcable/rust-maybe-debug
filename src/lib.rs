@@ -26,7 +26,7 @@ mod backend {
     include!("stable.rs");
 }
 
-/// A version of [std::dbg!](https://doc.rust-lang.org/std/macro.dbg.html) that works regardless
+/// A version of [`std::dbg!`](https://doc.rust-lang.org/std/macro.dbg.html) that works regardless
 /// of whether or not `T` implements `Debug`
 ///
 /// This requires the standard library to be present.
@@ -86,11 +86,19 @@ pub fn maybe_debug<T: ?Sized>(val: &T) -> MaybeDebug<'_> {
     <T as backend::MaybeDebug>::maybe_debug(val)
 }
 
-/// Indicates the possibility of [Debug] information.
+/// Optional presense of [Debug] information (equivalent to `Option<&dyn Debug>`)
 ///
-/// This is essentially `Option<&dyn Debug>`,
-/// except that it prints a reasonable fallback
-/// if the type cannot be debugged
+/// The main difference from the equivalent `Option`
+/// is that it prints a reasonable fallback (the type's name).
+/// 
+/// In other words `maybe_debug(NotDebug)` gives `"NotDebug { ... }`
+/// instead of just printing `None`.
+///
+/// You can *always* retrieve the original type name
+/// of the value, regardless of whether the `Debug` implementation
+/// is `Some` or `None`.
+///
+/// The type name is the same one given by [core::any::type_name].
 ///
 /// The specific variants of this struct are considered an implementation detail.
 #[non_exhaustive]
@@ -112,7 +120,7 @@ pub enum MaybeDebug<'a> {
     Str(&'a str),
 }
 impl<'a> MaybeDebug<'a> {
-    /// Check if this type can successfully pass through to the underlying `Debug` implementation.
+    /// Check if this type contians an underlying `Debug` implementation.
     ///
     /// Using the `Option<&dyn Debug>` analogy, this would be equivalent to `is_some`
     #[inline]
@@ -128,6 +136,9 @@ impl<'a> MaybeDebug<'a> {
     /// 
     /// Note this returns `true` even for `MaybeDebug::fallback_slice`,
     /// despite the fact that does include length information.
+    /// 
+    /// Using the `Option<&dyn Debug>` analogy, this would be equivalent
+    /// to `is_none`.
     #[inline]
     pub fn is_fallback(&self) -> bool {
         !self.has_debug_info()
@@ -141,6 +152,21 @@ impl<'a> MaybeDebug<'a> {
     #[inline]
     pub fn is_known_slice(&self) -> bool {
         matches!(*self, MaybeDebug::Slice { .. })
+    }
+    /// If the original value was a slice,
+    /// return its length.
+    /// 
+    /// Returns `None` if the original value was not known to be a slice.
+    ///
+    /// Just like [MaybeDebug::is_known_slice],
+    /// this may have false negatives on whether or not something is a slice.
+    /// However, if it returns `Some`, then the length is guarenteed to be correct.
+    #[inline]
+    pub fn original_slice_len(&self) -> Option<usize> {
+        match *self {
+            MaybeDebug::Slice(ref s) => Some(s.original_len()),
+            _ => None
+        }
     }
     /// Return the underling type name,
     /// as given by `core::any::type_name`
@@ -267,6 +293,9 @@ impl<'a> Debug for MaybeDebug<'a> {
 /// A slice of elements which may or may not implement `Debug`
 ///
 /// `MaybeDebugSlice` is to `&[T]` as `MaybeDebug` is to `T`
+/// 
+/// This is considered an implementation detail.
+#[doc(hidden)]
 #[derive(Copy, Clone)]
 pub struct MaybeDebugSlice<'a> {
     elements: *const c_void,
@@ -280,11 +309,12 @@ impl<'a> MaybeDebugSlice<'a> {
     /// Check if this type actually has any debug information,
     /// returning `false` if this will just print the length.
     #[inline]
-    pub fn has_debug_info(&self) -> bool {
+    fn has_debug_info(&self) -> bool {
         self.debug_vtable.is_some()
     }
     /// Wrap the specified slice to implement `Debug`
-    pub fn from_slice<T: 'a>(elements: &'a [T]) -> Self {
+    #[inline]
+    pub(crate) fn from_slice<T: 'a>(elements: &'a [T]) -> Self {
         let debug_vtable = if elements.is_empty() {
             None
         } else {
@@ -292,6 +322,7 @@ impl<'a> MaybeDebugSlice<'a> {
         };
         unsafe { Self::with_vtable(elements, debug_vtable) }
     }
+    #[inline]
     unsafe fn with_vtable<T: 'a>(elements: &'a [T], debug_vtable: Option<backend::DebugVtable>) -> Self {
         MaybeDebugSlice {
             elements: elements.as_ptr() as *const _,
@@ -306,7 +337,7 @@ impl<'a> MaybeDebugSlice<'a> {
     /// This is available regardless of whether
     /// or not the type actually implements debug.
     #[inline]
-    pub fn original_len(&self) -> usize {
+    fn original_len(&self) -> usize {
         self.len
     }
 }
