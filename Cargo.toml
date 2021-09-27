@@ -1,0 +1,24 @@
+[package]
+name = "maybe-debug"
+version = "0.1.0"
+edition = "2018"
+authors = ["Techcable <Techcable@techcable.net>"]
+description = "impl Debug for Any (via specialization)"
+license = "MIT OR Apache-2.0"
+readme = "README.md"
+repository = "https://github.com/Techcable/rust-maybe-debug"
+keywords = ["debug", "specialization", "no_std"]
+
+[features]
+default = []
+
+[dependencies]
+# Used to detect stable vs nightly
+rustversion = "1"
+
+[build-dependencies]
+# NOTE: This is necessary because proc macros
+# cant be used on modules. See build.rs for details
+rustversion = "1.0"
+
+
