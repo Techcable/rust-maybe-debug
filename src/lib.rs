@@ -69,6 +69,8 @@ pub use self::maybe_dbg as dbg;
 /// Attempt to cast the specified value into `&dyn Debug`,
 /// returning `None` if this fails.
 ///
+/// This always returns `None` on the stable compiler.
+///
 /// Currently it is not possible to support casting unsized types.
 #[inline]
 pub fn cast_debug<'a, T: 'a>(val: &'a T) -> Option<&'a (dyn Debug + 'a)> {
@@ -77,6 +79,8 @@ pub fn cast_debug<'a, T: 'a>(val: &'a T) -> Option<&'a (dyn Debug + 'a)> {
 
 /// Attempt to cast the specified value into `&dyn Debug`,
 /// falling back to a reasonable default on failure.
+/// 
+/// This unconditionally delegates to [MaybeDebug::fallback] on the stable compiler.
 #[inline]
 pub fn maybe_debug<T: ?Sized>(val: &T) -> MaybeDebug<'_> {
     <T as backend::MaybeDebug>::maybe_debug(val)
@@ -93,14 +97,18 @@ pub fn maybe_debug<T: ?Sized>(val: &T) -> MaybeDebug<'_> {
 #[allow(missing_docs)]
 #[derive(Copy, Clone)]
 pub enum MaybeDebug<'a> {
+    #[doc(hidden)]
     DynTrait {
         type_name: &'static str,
         val: &'a (dyn Debug + 'a)
     },
+    #[doc(hidden)]
     TypeName {
         type_name: &'static str
     },
+    #[doc(hidden)]
     Slice(MaybeDebugSlice<'a>),
+    #[doc(hidden)]
     Str(&'a str),
 }
 impl<'a> MaybeDebug<'a> {
